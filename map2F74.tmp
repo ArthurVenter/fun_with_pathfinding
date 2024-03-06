@@ -1,6 +1,8 @@
-[gd_scene load_steps=6 format=3 uid="uid://cuqbc7lg0rrjl"]
+[gd_scene load_steps=8 format=3 uid="uid://cuqbc7lg0rrjl"]
 
 [ext_resource type="MeshLibrary" uid="uid://t6wm1tkybpu3" path="res://library.tres" id="1_swjxi"]
+[ext_resource type="Script" path="res://map.gd" id="1_u7wfc"]
+[ext_resource type="Script" path="res://player_view.gd" id="2_kkufv"]
 [ext_resource type="Script" path="res://GridMap.gd" id="4_a6dvk"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_kj83o"]
@@ -17,6 +19,7 @@ tonemap_mode = 2
 glow_enabled = true
 
 [node name="map" type="Node3D"]
+script = ExtResource("1_u7wfc")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_thxv8")
@@ -27,6 +30,7 @@ shadow_enabled = true
 
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 11.129, 0.055)
+script = ExtResource("2_kkufv")
 
 [node name="RayCast3D" type="RayCast3D" parent="Camera3D"]
 

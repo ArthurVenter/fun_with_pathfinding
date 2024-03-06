@@ -4,11 +4,13 @@ extends GridMap
 var map_cells: Array = []
 var start_cell: Vector3i = Vector3i.UP
 var goal_cell: Vector3i = Vector3i.UP
-var path: Dictionary = {}
+var came_from: Dictionary = {}
 
+# Cell types and their corresponding gridmap values
 enum unique {start = 1, goal = 2}
-enum placeable {space = 0, searched = 3}
+enum placeable {space = 0 }
 enum block {cliff = 4}
+enum highlight {searched = 3, path = 5}
 
 # Drag and drop variables
 var selected_cell: Vector3i
@@ -63,43 +65,75 @@ func _process(delta: float) -> void:
 			# Use it 'drag' the selected_cell around
 			if Input.is_action_pressed("left_click"):
 				var cur_cell: Vector3i = local_to_map(ray_cast_3d.get_collision_point())
-				if get_cell_item(cur_cell) in placeable.values():
+				if get_cell_item(cur_cell) in placeable.values() or get_cell_item(cur_cell) in highlight.values():
+					# If the initial cell is 'unique'
 					if selected_cell_type in unique.values():
-							# Change cell position
-							set_cell_item(cur_cell, selected_cell_type)
-							set_cell_item(selected_cell, placeable.space)
-							selected_cell = cur_cell
+						# Change cell position
+						set_cell_item(cur_cell, selected_cell_type)
+						set_cell_item(selected_cell, placeable.space)
+						selected_cell = cur_cell
+						
+						# Change start and goal cell values to reflect their new positions
+						if selected_cell_type == unique.start : 
+							start_cell = selected_cell
+						if selected_cell_type == unique.goal : 
+							goal_cell = selected_cell
 							
-							# Reset map and re-calculate path
-							if selected_cell_type == unique.start : 
-								start_cell = selected_cell
-								calculate_path([selected_cell])
-							if selected_cell_type == unique.goal : 
-								goal_cell = selected_cell
-								calculate_path([start_cell])
-								
-					elif selected_cell_type in placeable.values():
+					# If the initial cell isn't 'unique' or 'impassible terrain'
+					elif selected_cell_type in placeable.values() or selected_cell_type in highlight.values():
+						# Set cell to 'impassible terrain'
 						set_cell_item(cur_cell, block.cliff)
-			
+						
+				# Update path with new changes
+				calculate_path([start_cell])
+				
+			if Input.is_action_pressed("right_click"):
+				# Revert cell if it is impassible terrain
+				var cur_cell: Vector3i = local_to_map(ray_cast_3d.get_collision_point())
+				if get_cell_item(cur_cell) == block.cliff:
+					set_cell_item(cur_cell, placeable.space)
+					
+				# Update path with new changes
+				calculate_path([start_cell])
+					
 	else:
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 	
 func calculate_path(frontier):
+	# Reset map before calculating a path 
+	# This is mostly so that the visuals will display correctly
 	reset_map()
+	
+	# While there is still cells to search (frontier)
 	while not frontier.is_empty():
 		var cell : Vector3i = frontier.pop_front()
 		
+		# Break if we reached the goal cell
 		if cell == goal_cell:
 			frontier = []
 			break
 		
+		# Search surrounding cells and calculate its closeness to the goal cell
+		var priority_cell: Dictionary = {}
 		for neighbour in find_graph_neighbours(cell):
-			if neighbour not in path:
-				frontier.append(neighbour)
-				path[neighbour] = cell
+			if neighbour not in came_from:
+				priority_cell[heuristic(goal_cell, neighbour)] = neighbour
+				came_from[neighbour] = cell
 				if get_cell_item(neighbour) == placeable.space:
-					set_cell_item(neighbour, placeable.searched)
+					set_cell_item(neighbour, highlight.searched)
+		
+		# Return when there is no possible path
+		if priority_cell.is_empty():
+			return
+			
+		# Add next closest cell to frontier
+		frontier.append(priority_cell[priority_cell.keys().min()])
+		
+	# Draw path
+	show_path()
 
+# Return list of surrounding 'neighbour' cells
+# Ignores special cells like start, goal and impassible terrain
 func find_graph_neighbours(cell) -> Array:
 	var graph_neighbours: Array = []
 	for direction in [Vector3i.LEFT, Vector3i.RIGHT, Vector3i.FORWARD, Vector3i.BACK]:
@@ -109,13 +143,35 @@ func find_graph_neighbours(cell) -> Array:
 			graph_neighbours.append(neighbour)
 			
 	return graph_neighbours
+	
+# Heuristic for calculating the closeness of a cell to the goal cell
+func heuristic(a: Vector3i, b: Vector3i) -> int:
+	# Manhattan distance on a square grid
+	return abs(a.x - b.x) + abs(a.z - b.z)
 
+func show_path() -> void:
+	var path: Array = []
+	var cur_cell: Vector3i = goal_cell
+	
+	# Calculate the path by retracing steps from the goal cell
+	while cur_cell != start_cell:
+		path.append(cur_cell)
+		cur_cell = came_from[cur_cell]
+		
+		# Highlight path cells
+		if cur_cell != start_cell:
+			set_cell_item(cur_cell, highlight.path)
+	
+	# Re-arrange path variable to go from start cell to goal cell
+	path.append(start_cell)
+	path.reverse()		
+	
 # Reset the map tiles to type 0 and path to empty
 func reset_map() -> void:
-	path = {}
+	came_from = {}
 	for cell in map_cells:
-		if get_cell_item(cell) in placeable.values():
-			set_cell_item(cell, 0)
+		if get_cell_item(cell) in highlight.values():
+			set_cell_item(cell, placeable.space)
 
 # Label every tile in the map
 func label_map() -> void:
